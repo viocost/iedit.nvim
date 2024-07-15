@@ -1,12 +1,14 @@
 local finder = require("iedit.finder")
 local M = {}
 M.ns = vim.api.nvim_create_namespace("iedit_selector")
+
 function M.start_loop(ranges, idx, config)
 	assert(idx > 0 and idx <= #ranges)
 	local selected = setmetatable({}, {})
 	local function get(id)
 		return selected[id] and true or false
 	end
+
 	local function del(id)
 		if not get(id) then
 			return
@@ -27,6 +29,7 @@ function M.start_loop(ranges, idx, config)
 			strict = false,
 		})
 	end
+
 	local function clean()
 		vim.api.nvim_buf_clear_namespace(0, M.ns, 0, -1)
 	end
@@ -97,6 +100,7 @@ function M.start_loop(ranges, idx, config)
 		end
 	end
 end
+
 function M.start(range, config, curpos)
 	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 	local text = vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})

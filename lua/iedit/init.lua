@@ -2,6 +2,20 @@ local M = {}
 
 M.original_keymaps = {}
 
+local function setup_highlights()
+	vim.api.nvim_set_hl(0, "IeditSelect", {
+
+		link = "IncSearch", -- Link to the Visual highlight group
+	})
+
+	vim.api.nvim_set_hl(0, "IeditCurrent", {
+		fg = "#000000", -- White text
+		bg = "#dd63ff", -- Dark red background
+	})
+end
+
+setup_highlights()
+
 M.default_config = {
 	select = {
 		map = setmetatable({
@@ -22,18 +36,24 @@ M.default_config = {
 			selected = "Search",
 		},
 	},
-	highlight = "IncSearch",
-	current_highlight = "PmenuSel",
+	highlight = "IeditSelect",
+	current_highlight = "IeditCurrent",
 }
 
 M.config = vim.deepcopy(M.default_config)
 
 function M.set_iedit_keymaps(buf)
-	-- Store original mappings
-	M.original_keymaps["n"] = vim.api.nvim_buf_get_keymap(buf, "n")
-	M.original_keymaps["v"] = vim.api.nvim_buf_get_keymap(buf, "v")
+	-- Store original mappings for specific keys
+	M.original_keymaps = {}
+	local keys_to_override = { "n", "N" }
+	for _, key in ipairs(keys_to_override) do
+		local existing_keymap = vim.api.nvim_buf_get_keymap(buf, "n")[key]
+		if existing_keymap and #existing_keymap > 0 then
+			M.original_keymaps[key] = existing_keymap[1]
+		end
+	end
 
-	-- Set new mappings for 'n', 'p', etc.
+	-- Set new mappings for 'n' and 'N'
 	vim.api.nvim_buf_set_keymap(
 		buf,
 		"n",
@@ -48,24 +68,24 @@ function M.set_iedit_keymaps(buf)
 		[[<cmd>lua require'iedit'.goto_prev_occurrence()<CR>]],
 		{ noremap = true, silent = true }
 	)
-	-- Add more mappings as needed
 end
 function M.restore_original_keymaps(buf)
 	-- Clear iedit-specific mappings
 	vim.api.nvim_buf_del_keymap(buf, "n", "n")
 	vim.api.nvim_buf_del_keymap(buf, "n", "N")
-	-- Add more as needed
 
-	-- Restore original mappings
-	for _, keymap in ipairs(M.original_keymaps["n"]) do
-		vim.api.nvim_buf_set_keymap(buf, "n", keymap.lhs, keymap.rhs or "", {
+	-- Restore original mappings for specific keys
+	for key, keymap in pairs(M.original_keymaps) do
+		vim.api.nvim_buf_set_keymap(buf, "n", key, keymap.rhs or "", {
 			silent = keymap.silent == 1,
 			noremap = keymap.noremap == 1,
 			expr = keymap.expr == 1,
 			nowait = keymap.nowait == 1,
 		})
 	end
-	-- Do the same for 'v' mode if needed
+
+	-- Clear the stored original keymaps
+	M.original_keymaps = {}
 end
 
 function M.goto_next_occurrence()

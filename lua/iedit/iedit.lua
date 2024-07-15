@@ -7,6 +7,7 @@ function M.mark_id_to_range(buf, mark_id)
 	local mark = vim.api.nvim_buf_get_extmark_by_id(buf, M.ns, mark_id, { details = true })
 	return { mark[1], mark[2], mark[3].end_row, mark[3].end_col }
 end
+
 function M.set_extmark(buf, range, hl, id, constricted)
 	return vim.api.nvim_buf_set_extmark(buf, M.ns, range[1], range[2], {
 		end_line = range[3],
@@ -17,6 +18,7 @@ function M.set_extmark(buf, range, hl, id, constricted)
 		id = id,
 	})
 end
+
 function M.create_extmarks(buf, ranges, highlight)
 	local extmarks = {}
 	for _, range in ipairs(ranges) do
@@ -24,6 +26,7 @@ function M.create_extmarks(buf, ranges, highlight)
 	end
 	return extmarks
 end
+
 function M.start(ranges, config)
 	local buf = vim.api.nvim_get_current_buf()
 	if #ranges == 0 then
