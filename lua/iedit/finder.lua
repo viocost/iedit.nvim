@@ -38,6 +38,7 @@ function M.find_next(buf, pos, text)
 		end
 	end
 end
+
 function M.find_all_ocurances(buf, text, curpos)
 	local pos = { 0, 0 }
 	local ranges = {}

@@ -45,7 +45,7 @@ M.config = vim.deepcopy(M.default_config)
 function M.set_iedit_keymaps(buf)
 	-- Store original mappings for specific keys
 	M.original_keymaps = {}
-	local keys_to_override = { "n", "N" }
+	local keys_to_override = { "n", "N", "t" }
 	for _, key in ipairs(keys_to_override) do
 		local existing_keymap = vim.api.nvim_buf_get_keymap(buf, "n")[key]
 		if existing_keymap and #existing_keymap > 0 then
@@ -66,6 +66,13 @@ function M.set_iedit_keymaps(buf)
 		"n",
 		"N",
 		[[<cmd>lua require'iedit'.goto_prev_occurrence()<CR>]],
+		{ noremap = true, silent = true }
+	)
+	vim.api.nvim_buf_set_keymap(
+		buf,
+		"n",
+		"t",
+		[[<cmd>lua require'iedit'.toggle_single()<CR>]],
 		{ noremap = true, silent = true }
 	)
 end
@@ -308,6 +315,72 @@ function M.toggle(_opts)
 		M.select(_opts)
 	else
 		M.stop()
+	end
+end
+
+function M.toggle_single()
+	local buf = vim.api.nvim_get_current_buf()
+	local cursor_pos = vim.api.nvim_win_get_cursor(0)
+	local cursor_row, cursor_col = cursor_pos[1] - 1, cursor_pos[2]
+	local line = vim.api.nvim_buf_get_lines(buf, cursor_row, cursor_row + 1, false)[1]
+
+	if vim.b[buf].iedit_mode then
+		-- We're in iedit mode
+		local iedit_module = require("iedit.iedit")
+		local marks = vim.b[buf].iedit_data[tostring(iedit_module.id - 1)]
+
+		if not marks or #marks == 0 then
+			return
+		end
+
+		local matching_mark_index = nil
+		for i, mark_id in ipairs(marks) do
+			local pos = iedit_module.mark_id_to_range(buf, mark_id)
+			if cursor_row == pos[1] and cursor_col >= pos[2] and cursor_col < pos[4] then
+				matching_mark_index = i
+				break
+			end
+		end
+
+		if matching_mark_index then
+			-- Deselect the occurrence
+			local mark_id = table.remove(marks, matching_mark_index)
+			iedit_module.remove_extmark(buf, mark_id)
+			if M.current_index > matching_mark_index then
+				M.current_index = M.current_index - 1
+			elseif M.current_index == matching_mark_index then
+				M.current_index = math.min(M.current_index, #marks)
+			end
+		else
+			-- Check if cursor is on a matching occurrence and select it
+			local word_start, word_end = line:find(M.current_word, cursor_col + 1)
+			if word_start and word_start > 0 then
+				local new_mark_id =
+					iedit_module.create_extmark(buf, { cursor_row, word_start - 1, cursor_row, word_end })
+				table.insert(marks, new_mark_id)
+				iedit_module.update_extmark_highlight(buf, new_mark_id, "IeditSelect")
+				M.current_index = #marks
+			end
+		end
+
+		-- Update highlights
+		for i, mark_id in ipairs(marks) do
+			local highlight = i == M.current_index and "IeditCurrent" or "IeditSelect"
+			iedit_module.update_extmark_highlight(buf, mark_id, highlight)
+		end
+
+		-- If no marks left, exit iedit mode
+		if #marks == 0 then
+			M.stop()
+		end
+	else
+		-- We're not in iedit mode
+		local word_start, word_end = line:find("%w+", cursor_col + 1)
+		if word_start and word_start > 0 then
+			local word = line:sub(word_start, word_end)
+			local ranges = { { cursor_row, word_start - 1, cursor_row, word_end } }
+			M.enter_iedit_mode(buf, ranges, 1)
+		end
 	end
 end
 
