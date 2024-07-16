@@ -12,7 +12,7 @@ function M.get_visual_selection()
 	return range
 end
 
-function M.expand(line, row, col)
+function M.get_keyword_range(line, row, col)
 	local range = {}
 
 	local regex = vim.regex([[\k]])

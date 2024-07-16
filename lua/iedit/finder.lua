@@ -8,10 +8,10 @@ function M.find_next(buf, pos, text, lock_to_keyword)
 		if not lock_to_keyword then
 			return true
 		end
-		local expanded = util.expand(line, 0, start_col)
+		local expanded = util.get_keyword_range(line, 0, start_col)
 
 		if expanded == nil then
-			error("Could not expand the keyword")
+			error("Could not get keyword range")
 		end
 
 		return expanded[2] == start_col - 1 and expanded[4] == end_col

@@ -159,7 +159,7 @@ function M.enter_iedit_mode(buf, ranges, initial_index)
 	end
 end
 
-local function merge_config(origin, new, _not_table, _opt_path)
+local function merge(origin, new, _not_table, _opt_path)
 	_opt_path = _opt_path or "config"
 	if origin == nil and new ~= nil then
 		error(("\n\n\n" .. [[
@@ -195,7 +195,7 @@ local function merge_config(origin, new, _not_table, _opt_path)
 	end
 	local ret = {}
 	for k, v in pairs(keys) do
-		ret[k] = merge_config(v[1], v[2], (getmetatable(origin[k]) or {}).__t, _opt_path .. "." .. k)
+		ret[k] = merge(v[1], v[2], (getmetatable(origin[k]) or {}).__t, _opt_path .. "." .. k)
 	end
 	return ret
 end
@@ -208,32 +208,25 @@ function M.setup(config)
         However, the configuration should be a table.
         ]] .. "\n"):format(vim.inspect(config), type(config)))
 	end
-	merge_config(M.default_config, config)
+	merge(M.default_config, config)
 end
 
 function M.select(_opts)
 	_opts = _opts or {}
 	M.stop()
-
+	local range = {}
 	local cursor_pos
 
-	local line = vim.fn.getline(".") -- content of the current line
-	local col = vim.fn.col(".") -- number of current column where cursor is
-	local row = vim.fn.line(".") - 1 -- number of current row where cursor is
+	local line = vim.fn.getline(".")
+	local col = vim.fn.col(".")
+	local row = vim.fn.line(".") - 1
 	cursor_pos = { row, col - 1 } -- Store cursor position
-
-	local range
-
 	if vim.fn.mode() == "n" then
-		range = util.expand(line, row, col)
+		range = util.get_keyword_range(line, row, col) or {}
 	elseif vim.fn.mode() == "v" or vim.fn.mode() == "V" then
-		range = util.get_visual_selection()
+		range = util.get_visual_selection() or {}
 	else
 		error(("mode `%s` not supported"):format(vim.fn.mode()))
-	end
-
-	if range == nil then
-		error("Could not obtain range")
 	end
 
 	local ranges, initial_index
@@ -242,8 +235,6 @@ function M.select(_opts)
 		local text = vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})
 		if #text == 1 and text[1] == "" then
 			vim.notify("No text selected", vim.log.levels.WARN)
-
-			vim.cmd.norm({ "\x1b", bang = true })
 			return
 		end
 		ranges, initial_index = require("iedit.finder").find_all_ocurances(0, text, cursor_pos)
