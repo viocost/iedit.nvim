@@ -1,4 +1,5 @@
 local M = {}
+local util = require("iedit.util")
 
 M.original_keymaps = {}
 
@@ -58,14 +59,14 @@ function M.set_iedit_keymaps(buf)
 		buf,
 		"n",
 		"n",
-		[[<cmd>lua require'iedit'.goto_next_occurrence()<CR>]],
+		[[<cmd>lua require'iedit'.step()<CR>]],
 		{ noremap = true, silent = true }
 	)
 	vim.api.nvim_buf_set_keymap(
 		buf,
 		"n",
 		"N",
-		[[<cmd>lua require'iedit'.goto_prev_occurrence()<CR>]],
+		[[<cmd>lua require'iedit'.step({back=true})<CR>]],
 		{ noremap = true, silent = true }
 	)
 	vim.api.nvim_buf_set_keymap(
@@ -96,7 +97,10 @@ function M.restore_original_keymaps(buf)
 	M.original_keymaps = {}
 end
 
-function M.goto_next_occurrence()
+function M.step(args)
+	args = args or {}
+	local back = args.back or false
+
 	local iedit_module = require("iedit.iedit")
 	local buf = vim.api.nvim_get_current_buf()
 	if not vim.b[buf].iedit_mode then
@@ -115,36 +119,12 @@ function M.goto_next_occurrence()
 	end
 
 	M.current_index = M.current_index or 1
-	M.current_index = (M.current_index % #marks) + 1
-	local mark_id = marks[M.current_index]
-
-	-- Set highlight of the new current node
-	iedit_module.update_extmark_highlight(buf, mark_id, M.config.current_highlight)
-
-	local pos = iedit_module.mark_id_to_range(buf, mark_id)
-	vim.api.nvim_win_set_cursor(0, { pos[1] + 1, pos[2] })
-end
-
-function M.goto_prev_occurrence()
-	local iedit_module = require("iedit.iedit")
-	local buf = vim.api.nvim_get_current_buf()
-	if not vim.b[buf].iedit_mode then
-		return
+	if back then
+		M.current_index = ((M.current_index - 2 + #marks) % #marks) + 1
+	else
+		M.current_index = (M.current_index % #marks) + 1
 	end
 
-	local marks = vim.b[buf].iedit_data[tostring(iedit_module.id - 1)]
-	if not marks or #marks == 0 then
-		return
-	end
-
-	-- Reset highlight of the previous current node
-	if M.current_index then
-		local prev_mark_id = marks[M.current_index]
-		iedit_module.update_extmark_highlight(buf, prev_mark_id, M.config.highlight)
-	end
-
-	M.current_index = M.current_index or 1
-	M.current_index = ((M.current_index - 2 + #marks) % #marks) + 1
 	local mark_id = marks[M.current_index]
 
 	-- Set highlight of the new current node
@@ -179,7 +159,7 @@ function M.enter_iedit_mode(buf, ranges, initial_index)
 	end
 end
 
-local function merge(origin, new, _not_table, _opt_path)
+local function merge_config(origin, new, _not_table, _opt_path)
 	_opt_path = _opt_path or "config"
 	if origin == nil and new ~= nil then
 		error(("\n\n\n" .. [[
@@ -201,7 +181,6 @@ local function merge(origin, new, _not_table, _opt_path)
 	if new == nil then
 		return origin
 	end
-
 	if not origin or new.merge == false then
 		return new
 	end
@@ -216,7 +195,7 @@ local function merge(origin, new, _not_table, _opt_path)
 	end
 	local ret = {}
 	for k, v in pairs(keys) do
-		ret[k] = merge(v[1], v[2], (getmetatable(origin[k]) or {}).__t, _opt_path .. "." .. k)
+		ret[k] = merge_config(v[1], v[2], (getmetatable(origin[k]) or {}).__t, _opt_path .. "." .. k)
 	end
 	return ret
 end
@@ -229,53 +208,42 @@ function M.setup(config)
         However, the configuration should be a table.
         ]] .. "\n"):format(vim.inspect(config), type(config)))
 	end
-	merge(M.default_config, config)
+	merge_config(M.default_config, config)
 end
 
 function M.select(_opts)
 	_opts = _opts or {}
 	M.stop()
-	local range = {}
+
 	local cursor_pos
+
+	local line = vim.fn.getline(".") -- content of the current line
+	local col = vim.fn.col(".") -- number of current column where cursor is
+	local row = vim.fn.line(".") - 1 -- number of current row where cursor is
+	cursor_pos = { row, col - 1 } -- Store cursor position
+
+	local range
+
 	if vim.fn.mode() == "n" then
-		local line = vim.fn.getline(".")
-		local col = vim.fn.col(".")
-		local row = vim.fn.line(".") - 1
-		cursor_pos = { row, col - 1 } -- Store cursor position
-		local regex = vim.regex([[\k]])
-		range = { row, nil, row, nil }
-		while not regex:match_str(line:sub(col, col)) do
-			col = col + 1
-			if #line < col then
-				vim.notify("No word under (or after) cursor", vim.log.levels.WARN)
-				return
-			end
-		end
-		while regex:match_str(line:sub(col + 1, col + 1)) do
-			col = col + 1
-		end
-		range[4] = col
-		while regex:match_str(line:sub(col, col)) do
-			col = col - 1
-		end
-		range[2] = col
+		range = util.expand(line, row, col)
 	elseif vim.fn.mode() == "v" or vim.fn.mode() == "V" then
-		local pos1 = vim.fn.getpos("v")
-		local pos2 = vim.fn.getpos(".")
-		if pos1[2] > pos2[2] or (pos1[2] == pos2[2] and pos1[3] > pos2[3]) then
-			pos1, pos2 = pos2, pos1
-		end
-		range = { pos1[2] - 1, pos1[3] - 1, pos2[2] - 1, pos2[3] }
-		cursor_pos = { pos2[2] - 1, pos2[3] - 1 } -- Store cursor position
-		vim.cmd.norm({ "\x1b", bang = true })
+		range = util.get_visual_selection()
 	else
 		error(("mode `%s` not supported"):format(vim.fn.mode()))
 	end
+
+	if range == nil then
+		error("Could not obtain range")
+	end
+
 	local ranges, initial_index
+
 	if _opts.all then
 		local text = vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})
 		if #text == 1 and text[1] == "" then
 			vim.notify("No text selected", vim.log.levels.WARN)
+
+			vim.cmd.norm({ "\x1b", bang = true })
 			return
 		end
 		ranges, initial_index = require("iedit.finder").find_all_ocurances(0, text, cursor_pos)
@@ -283,6 +251,7 @@ function M.select(_opts)
 		ranges, initial_index = require("iedit.selector").start(range, M.config.select, cursor_pos)
 	end
 
+	vim.cmd.norm({ "\x1b", bang = true })
 	local buf = vim.api.nvim_get_current_buf()
 	M.enter_iedit_mode(buf, ranges, initial_index)
 end
