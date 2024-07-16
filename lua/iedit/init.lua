@@ -211,8 +211,7 @@ function M.setup(config)
 	merge(M.default_config, config)
 end
 
-function M.select(_opts)
-	_opts = _opts or {}
+function M.select()
 	M.stop()
 	local range = {}
 	local cursor_pos
@@ -231,16 +230,12 @@ function M.select(_opts)
 
 	local ranges, initial_index
 
-	if _opts.all then
-		local text = vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})
-		if #text == 1 and text[1] == "" then
-			vim.notify("No text selected", vim.log.levels.WARN)
-			return
-		end
-		ranges, initial_index = require("iedit.finder").find_all_ocurances(0, text, cursor_pos)
-	else
-		ranges, initial_index = require("iedit.selector").start(range, M.config.select, cursor_pos)
+	local text = vim.api.nvim_buf_get_text(0, range[1], range[2], range[3], range[4], {})
+	if #text == 1 and text[1] == "" then
+		vim.notify("No text selected", vim.log.levels.WARN)
+		return
 	end
+	ranges, initial_index = require("iedit.finder").find_all_ocurances(0, text, cursor_pos)
 
 	vim.cmd.norm({ "\x1b", bang = true })
 	local buf = vim.api.nvim_get_current_buf()
@@ -248,7 +243,7 @@ function M.select(_opts)
 end
 
 function M.select_all()
-	M.select({ all = true })
+	M.select()
 end
 
 function M.stop(id, buf)
