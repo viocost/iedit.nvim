@@ -9,8 +9,8 @@ local function setup_highlights()
 	})
 
 	vim.api.nvim_set_hl(0, "IeditCurrent", {
-		fg = "#000000", -- White text
-		bg = "#dd63ff", -- Dark red background
+		fg = "#000000",
+		bg = "#dd63ff",
 	})
 end
 
@@ -76,6 +76,7 @@ function M.set_iedit_keymaps(buf)
 		{ noremap = true, silent = true }
 	)
 end
+
 function M.restore_original_keymaps(buf)
 	-- Clear iedit-specific mappings
 	vim.api.nvim_buf_del_keymap(buf, "n", "n")
@@ -192,12 +193,15 @@ local function merge(origin, new, _not_table, _opt_path)
         However, that option should have the type `%s` (or `nil`).
         ]] .. "\n"):format(_opt_path, vim.inspect(new), type(new), type(origin)))
 	end
+
 	if _not_table or (type(origin) ~= "table" and type(new) ~= "table") then
 		return vim.F.if_nil(new, origin)
 	end
+
 	if new == nil then
 		return origin
 	end
+
 	if not origin or new.merge == false then
 		return new
 	end
