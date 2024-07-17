@@ -4,30 +4,26 @@ local util = require("iedit.util")
 function M.find_next(buf, pos, text, lock_to_keyword)
 	lock_to_keyword = lock_to_keyword ~= false -- true by default
 
-	print("find next call arr: ", vim.inspect(pos), vim.inspect(text))
 	local function is_keyword_match(line, start_col, end_col)
 		if not lock_to_keyword then
 			return true
 		end
 		local expanded = util.get_keyword_range(line, start_col, start_col) or {}
-
-		local result = expanded[2] == start_col - 1 and expanded[4] == end_col
-		print("keyword match: ", start_col, end_col, line, result, vim.inspect(expanded))
-		return result
+		return expanded[2] == start_col - 1 and expanded[4] == end_col
 	end
 
 	if #text == 1 then
 		for row, line in ipairs(vim.api.nvim_buf_get_lines(buf, pos[1], -1, true)) do
-			local start_col, end_col
-			if row == 1 then
-				print("Searching in row ", vim.inspect(row))
-				start_col, end_col = vim.fn.getline(pos[1] + 1):find(text[1], pos[2] + 1, true)
-			else
-				start_col, end_col = line:find(text[1], 1, true)
-			end
-
-			if start_col and is_keyword_match(line, start_col, end_col) then
-				return { row + pos[1] - 1, start_col - 1, row + pos[1] - 1, end_col }
+			local search_start = row == 1 and pos[2] + 1 or 1
+			while true do
+				local start_col, end_col = line:find(text[1], search_start, true)
+				if not start_col then
+					break
+				end
+				if is_keyword_match(line, start_col, end_col) then
+					return { row + pos[1] - 1, start_col - 1, row + pos[1] - 1, end_col }
+				end
+				search_start = end_col + 1
 			end
 		end
 		return
@@ -35,28 +31,45 @@ function M.find_next(buf, pos, text, lock_to_keyword)
 
 	local lines = vim.api.nvim_buf_get_lines(buf, pos[1], -1, true)
 	for row, _ in ipairs(lines) do
-		local flag = true
-		for trow, tline in ipairs(text) do
-			tline = vim.pesc(tline)
-			if trow ~= 1 then
-				tline = "^" .. tline
+		local search_start = row == 1 and pos[2] + 1 or 1
+		while true do
+			local flag = true
+			local match_start, match_end
+
+			for trow, tline in ipairs(text) do
+				local current_line = lines[row + trow - 1]
+				if not current_line then
+					flag = false
+					break
+				end
+
+				local tline_pattern = vim.pesc(tline)
+				if trow ~= 1 then
+					tline_pattern = "^" .. tline_pattern
+				end
+				if trow ~= #text then
+					tline_pattern = tline_pattern .. "$"
+				end
+
+				local start_col, end_col = current_line:find(tline_pattern, trow == 1 and search_start or 1)
+				if not start_col or (trow == 1 and not is_keyword_match(current_line, start_col, end_col)) then
+					flag = false
+					break
+				end
+
+				if trow == 1 then
+					match_start, match_end = start_col, end_col
+				end
 			end
-			if trow ~= #text then
-				tline = tline .. "$"
+
+			if flag then
+				return { row + pos[1] - 1, match_start - 1, row + pos[1] + #text - 2, #text[#text] }
 			end
-			local current_line = lines[row + trow - 1]
-			if not current_line then
-				flag = false
+
+			if not match_start then
 				break
 			end
-			local start_col, end_col = current_line:find(tline, trow == 1 and pos[2] + 1 or 1)
-			if not start_col or (trow == 1 and not is_keyword_match(current_line, start_col, end_col)) then
-				flag = false
-				break
-			end
-		end
-		if flag then
-			return { row + pos[1] - 1, #lines[row] - #text[1], row + pos[1] + #text - 2, #text[#text] }
+			search_start = match_end + 1
 		end
 	end
 end
