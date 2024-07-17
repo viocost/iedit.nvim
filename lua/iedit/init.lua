@@ -343,4 +343,21 @@ function M.toggle_single()
 	end
 end
 
+function M.reload()
+	-- Define the namespace of your plugin
+	local plugin_namespace = "iedit"
+
+	-- Iterate through the package.loaded table
+	for name, _ in pairs(package.loaded) do
+		-- If the module name starts with the plugin namespace, clear it
+		if name:match("^" .. plugin_namespace) then
+			package.loaded[name] = nil
+		end
+	end
+
+	-- Reload the main configuration file
+	dofile(vim.fn.stdpath("config") .. "/init.lua")
+	print("Iedit reloaded")
+end
+
 return M

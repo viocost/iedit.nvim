@@ -4,23 +4,23 @@ local util = require("iedit.util")
 function M.find_next(buf, pos, text, lock_to_keyword)
 	lock_to_keyword = lock_to_keyword ~= false -- true by default
 
+	print("find next call arr: ", vim.inspect(pos), vim.inspect(text))
 	local function is_keyword_match(line, start_col, end_col)
 		if not lock_to_keyword then
 			return true
 		end
-		local expanded = util.get_keyword_range(line, 0, start_col)
+		local expanded = util.get_keyword_range(line, start_col, start_col) or {}
 
-		if expanded == nil then
-			error("Could not get keyword range")
-		end
-
-		return expanded[2] == start_col - 1 and expanded[4] == end_col
+		local result = expanded[2] == start_col - 1 and expanded[4] == end_col
+		print("keyword match: ", start_col, end_col, line, result, vim.inspect(expanded))
+		return result
 	end
 
 	if #text == 1 then
 		for row, line in ipairs(vim.api.nvim_buf_get_lines(buf, pos[1], -1, true)) do
 			local start_col, end_col
 			if row == 1 then
+				print("Searching in row ", vim.inspect(row))
 				start_col, end_col = vim.fn.getline(pos[1] + 1):find(text[1], pos[2] + 1, true)
 			else
 				start_col, end_col = line:find(text[1], 1, true)
@@ -71,6 +71,7 @@ function M.find_all_ocurances(buf, text, curpos)
 
 	while true do
 		local range = M.find_next(buf, pos, text, lock_to_keyword)
+		print("Found range: ", vim.inspect(range))
 		if range == nil then
 			break
 		end

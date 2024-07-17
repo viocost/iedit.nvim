@@ -1,6 +1,8 @@
 local M = {}
 M.ns = vim.api.nvim_create_namespace("iedit")
-M.id = 1
+
+M.id = 1 -- this is iedit unique session ID
+
 M.original_keymaps = {}
 
 function M.mark_id_to_range(buf, mark_id)
@@ -119,4 +121,5 @@ function M.update_extmark_highlight(buf, mark_id, hl_group)
 		})
 	end
 end
+
 return M
